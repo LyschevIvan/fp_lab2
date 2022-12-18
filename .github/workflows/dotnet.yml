@@ -1,0 +1,42 @@
+# This workflow will build a .NET project
+# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-net
+
+name: .NET
+
+on:
+  push:
+    branches: [ "master" ]
+  pull_request:
+    branches: [ "master" ]
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v3
+      with:
+        dotnet-version: 6.0.x
+    - name: Setup linter  
+      run: dotnet tool install -g dotnet-fsharplint
+    - name: Setup formatter
+      run: dotnet tool install -g fantomas
+    - name: Restore dependencies
+      run: dotnet restore
+    - name: Build
+      run: dotnet build --no-restore
+    - name: Lint 
+      run: |
+           dotnet fsharplint lint Program.fs
+           dotnet fsharplint lint Tests.fs
+           dotnet fsharplint lint HashMap.fs
+    - name: Format 
+      run: |
+           fantomas Program.fs
+           fantomas Test.fs
+           fantomas HashMap.fs
+    - name: Test
+      run: dotnet test --no-build --verbosity normal
