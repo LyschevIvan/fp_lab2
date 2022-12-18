@@ -1,6 +1,6 @@
 module HashMap
 
-type node<'K, 'V> =
+type Node<'K, 'V> =
     struct
         val key: 'K
         val value: 'V
@@ -17,25 +17,25 @@ type node<'K, 'V> =
               isDeleted = false }
     end
 
-type hashMap<'K, 'V> = Option<node<'K, 'V>>[]
+type HashMap<'K, 'V> = Option<Node<'K, 'V>>[]
 
-let create<'K, 'V> (count: int) : hashMap<'K, 'V> = Array.create count Option.None
+let create<'K, 'V> (count: int) : HashMap<'K, 'V> = Array.create count Option.None
 
-let getSize (hashMap: hashMap<'K, 'V>) = Array.length hashMap
+let getSize (hashMap: HashMap<'K, 'V>) = Array.length hashMap
 let private getNext i = i + 1
 
-let getIndex h (hashMap: hashMap<'K, 'V>) : int =
+let getIndex h (hashMap: HashMap<'K, 'V>) : int =
     let index = h &&& (getSize hashMap - 1)
     index
 
 let private resize
-    (addRec: int -> ('K * 'V) -> hashMap<'K, 'V> -> hashMap<'K, 'V>)
-    (hashMap: hashMap<'K, 'V>)
-    : hashMap<'K, 'V> =
+    (addRec: int -> ('K * 'V) -> HashMap<'K, 'V> -> HashMap<'K, 'V>)
+    (hashMap: HashMap<'K, 'V>)
+    : HashMap<'K, 'V> =
     let size = getSize hashMap
     let newHashMap = create<'K, 'V> (size * 2)
 
-    let rec transfer i (hMap: hashMap<'K, 'V>) : hashMap<'K, 'V> =
+    let rec transfer i (hMap: HashMap<'K, 'V>) : HashMap<'K, 'V> =
         if i < size then
             let ndOption = hashMap[i]
 
@@ -49,35 +49,35 @@ let private resize
 
     transfer 0 newHashMap
 
-let rec private addRec (i: int) (key: 'K, v: 'V) (hashTable: hashMap<'K, 'V>) =
+let rec private addRec (i: int) (key: 'K, v: 'V) (hashTable: HashMap<'K, 'V>) =
     let size = hashTable.Length
 
     if (i < size) then
         let ndOption = hashTable[i]
 
         if ndOption.IsNone then
-            hashTable[i] <- Option.Some(node (key, v))
+            hashTable[i] <- Option.Some(Node (key, v))
             hashTable
         else
             let nd = ndOption.Value
 
             if nd.isDeleted then
-                hashTable[i] <- Option.Some(node (key, v))
+                hashTable[i] <- Option.Some(Node (key, v))
                 hashTable
             else if (nd.key <> key) then
                 addRec (getNext i) (key, v) hashTable
             else
-                hashTable[i] <- Option.Some(node (key, v))
+                hashTable[i] <- Option.Some(Node (key, v))
                 hashTable
     else
         let newHM = resize (addRec) hashTable
         addRec (getIndex (hash key) newHM) (key, v) newHM
 
-let add (key: 'K, v: 'V) (hashTable: hashMap<'K, 'V>) =
+let add (key: 'K, v: 'V) (hashTable: HashMap<'K, 'V>) =
     let innerMap = Array.copy hashTable
     addRec (getIndex (hash key) innerMap) (key, v) innerMap
 
-let private markAsDeleted i (hashMap: hashMap<'K, 'V>) : hashMap<'K, 'V> =
+let private markAsDeleted i (hashMap: HashMap<'K, 'V>) : HashMap<'K, 'V> =
     let innerMap = Array.copy hashMap
     let size = hashMap.Length
     let ndOption = innerMap[i]
@@ -88,11 +88,11 @@ let private markAsDeleted i (hashMap: hashMap<'K, 'V>) : hashMap<'K, 'V> =
         if i = (size - 1) then
             innerMap[i] <- Option.None
         else
-            innerMap[i] <- Option.Some(node<'K, 'V> (nd.key, nd.value, true))
+            innerMap[i] <- Option.Some(Node<'K, 'V> (nd.key, nd.value, true))
 
     innerMap
 
-let rec private findIndexByKey i (key: 'K) (hashMap: hashMap<'K, 'V>) =
+let rec private findIndexByKey i (key: 'K) (hashMap: HashMap<'K, 'V>) =
     let size = getSize hashMap
 
     if i < size then
@@ -112,18 +112,18 @@ let rec private findIndexByKey i (key: 'K) (hashMap: hashMap<'K, 'V>) =
     else
         -1
 
-let delete (key: 'K) (hashMap: hashMap<'K, 'V>) =
+let delete (key: 'K) (hashMap: HashMap<'K, 'V>) =
     let hash = hash key
     let index = findIndexByKey (getIndex hash hashMap) key hashMap
     if index >= 0 then markAsDeleted index hashMap else hashMap
 
-let hasKey (key: 'K) (hashMap: hashMap<'K, 'V>) =
+let hasKey (key: 'K) (hashMap: HashMap<'K, 'V>) =
     let hash = hash key
     let startIndex = getIndex hash hashMap
     printfn $"start index : {startIndex}"
     findIndexByKey startIndex key hashMap <> -1
 
-let print (hashMap: hashMap<_, _>) =
+let print (hashMap: HashMap<_, _>) =
     for i in hashMap do
         if i.IsSome then
             if i.Value.isDeleted then
@@ -135,11 +135,11 @@ let print (hashMap: hashMap<_, _>) =
 
     hashMap
 
-let filter (f: node<'K, 'V> -> bool) (hashMap: hashMap<'K, 'V>) =
+let filter (f: Node<'K, 'V> -> bool) (hashMap: HashMap<'K, 'V>) =
     let innerMap = Array.copy hashMap
     let size = hashMap.Length
 
-    let rec doFilter i (hm: hashMap<'K, 'V>) : hashMap<'K, 'V> =
+    let rec doFilter i (hm: HashMap<'K, 'V>) : HashMap<'K, 'V> =
         if (i < size) then
             let ndOption = hm[i]
 
@@ -155,7 +155,7 @@ let filter (f: node<'K, 'V> -> bool) (hashMap: hashMap<'K, 'V>) =
 
     doFilter 0 innerMap
 
-let map (f: 'K -> 'V -> 'U) (hashMap: hashMap<'K, 'V>) =
+let map (f: 'K -> 'V -> 'U) (hashMap: HashMap<'K, 'V>) =
     let size = hashMap.Length
     let innerMap = create<'K, 'U> size
 
@@ -165,7 +165,7 @@ let map (f: 'K -> 'V -> 'U) (hashMap: hashMap<'K, 'V>) =
 
             if ndOption.IsSome then
                 let nd = ndOption.Value
-                innerMap[i] <- Option.Some(node (nd.key, f nd.key nd.value, nd.isDeleted))
+                innerMap[i] <- Option.Some(Node (nd.key, f nd.key nd.value, nd.isDeleted))
                 mapRec (i + 1)
             else
                 mapRec (i + 1)
@@ -174,7 +174,7 @@ let map (f: 'K -> 'V -> 'U) (hashMap: hashMap<'K, 'V>) =
 
     mapRec 0
 
-let fold (f: 'T -> 'K -> 'V -> 'T) (init: 'T) (hashMap: hashMap<'K, 'V>) : 'T =
+let fold (f: 'T -> 'K -> 'V -> 'T) (init: 'T) (hashMap: HashMap<'K, 'V>) : 'T =
     let size = hashMap.Length
 
     let rec foldRec i res =
@@ -196,7 +196,7 @@ let fold (f: 'T -> 'K -> 'V -> 'T) (init: 'T) (hashMap: hashMap<'K, 'V>) : 'T =
     foldRec 0 init
 
 
-let backFold (f: 'T -> 'K -> 'V -> 'T) (init: 'T) (hashMap: hashMap<'K, 'V>) : 'T =
+let backFold (f: 'T -> 'K -> 'V -> 'T) (init: 'T) (hashMap: HashMap<'K, 'V>) : 'T =
     let size = hashMap.Length
 
     let rec foldRec i res =
@@ -217,7 +217,7 @@ let backFold (f: 'T -> 'K -> 'V -> 'T) (init: 'T) (hashMap: hashMap<'K, 'V>) : '
 
     foldRec (size - 1) init
 
-let merge (hashMap1: hashMap<'K, 'V>) (hashMap2: hashMap<'K, 'V>) : hashMap<'K, 'V> =
+let merge (hashMap1: HashMap<'K, 'V>) (hashMap2: HashMap<'K, 'V>) : HashMap<'K, 'V> =
     if (getSize hashMap1 = 0) then
         hashMap2
     else if (getSize hashMap2 = 0) then
@@ -226,7 +226,7 @@ let merge (hashMap1: hashMap<'K, 'V>) (hashMap2: hashMap<'K, 'V>) : hashMap<'K, 
         let initSize = max (getSize hashMap1) (getSize hashMap2)
         let sumHm = create initSize
 
-        let rec iterOverHM i (hm: hashMap<'K, 'V>) (resHm: hashMap<'K, 'V>) =
+        let rec iterOverHM i (hm: HashMap<'K, 'V>) (resHm: HashMap<'K, 'V>) =
             if i >= 0 then
                 let ndOption = hm[i]
 
