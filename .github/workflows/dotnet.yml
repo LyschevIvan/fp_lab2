@@ -36,7 +36,7 @@ jobs:
     - name: Format 
       run: |
            fantomas Program.fs
-           fantomas Test.fs
+           fantomas Tests.fs
            fantomas HashMap.fs
     - name: Test
       run: dotnet test --no-build --verbosity normal
