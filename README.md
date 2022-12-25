@@ -77,24 +77,28 @@ let  rec private addRec (i : int) (key: 'K, v: 'V) (hashTable: hashMap<'K, 'V>) 
                 hashTable[i] <- Option.Some (node (key, v))
                 hashTable
     else
-        let newHM = resize (addRec) hashTable
+        let newHM = resize hashTable
         addRec (getIndex (hash key) newHM) (key, v) newHM
+and resize (hashMap: hashMap<'K, 'V>) : hashMap<'K, 'V> = ...
 ```
 Когда индекс массива выходит за границы размера, то создается новый массив с размером в два раза больше. Все элементы переносятся в него и добавляется требуемый 
 ```f#
-let private resize (addRec : int -> ('K * 'V) -> hashMap<'K,'V> -> hashMap<'K,'V>) (hashMap : hashMap<'K,'V>) : hashMap<'K,'V> =
-    let size = getSize hashMap 
+and resize (hashMap: hashMap<'K, 'V>) : hashMap<'K, 'V> =
+    let size = getSize hashMap
     let newHashMap = create<'K, 'V> (size * 2)
-    let rec transfer i (hMap : hashMap<'K,'V>) : hashMap<'K,'V> =
-        if i < size  then
+
+    let rec transfer i (hMap: hashMap<'K, 'V>) : hashMap<'K, 'V> =
+        if i < size then
             let ndOption = hashMap[i]
-            if (ndOption.IsSome) then
+
+            if ndOption.IsSome then
                 let nd = ndOption.Value
-                transfer (i+1) (addRec (getIndex (hash nd.key) hMap) (nd.key, nd.value) hMap)
-            else 
-                transfer (i+1) hMap
-        else 
+                transfer (i + 1) (addRec (getIndex (hash nd.key) hMap) (nd.key, nd.value) hMap)
+            else
+                transfer (i + 1) hMap
+        else
             hMap
+
     transfer 0 newHashMap
 ```
 Удаление осуществляется поиском нужного индекса по ключу и узел либо помечается удаленным, либо isDeleted
@@ -263,15 +267,29 @@ let merge (hashMap1: hashMap<'K, 'V>) (hashMap2: hashMap<'K, 'V>) : hashMap<'K, 
         |> iterOverHM (getSize hashMap2 - 1) hashMap2
 ```
 ### Тесты
-В каждом тесте используются начальные значения, которые создаются функцией init
+В каждом тесте, кроме PBT, используются начальные значения, которые создаются функцией initHm
 ```f#
-let init =
-    let hashTable: hashMap<int, int> = create 4 |> add (0, 1) |> add (1, -1) |> add (3, 4) |> add (0, 3) |> add (5,5)  |> add (-1,6) |> add (-1, 4)
+let initHm =
+    let hashTable: hashMap<int, int> =
+        create 4
+        |> add (0, 1)
+        |> add (1, -1)
+        |> add (3, 4)
+        |> add (0, 3)
+        |> add (5, 5)
+        |> add (-1, 6)
+        |> add (-1, 4)
+
     hashTable
 ```
 **Проверка увеличения размера массива.** Когда мы добавляем элемент с ключем size, он помещается в конец. Также с ключем -1.
 Соответственно когда добавляется с ключем -1, он упирается в размер массива и требуется увеличение. 
 ```f#
+[<Theory>]
+[<InlineData(4)>]
+[<InlineData(40)>]
+[<InlineData(12)>]
+[<InlineData(7)>]
 let ``test resize`` n =
     let hm = create n
     let init_size = hm |> getSize
@@ -281,70 +299,84 @@ let ``test resize`` n =
 ```
 **Проверка удаления.** Элемент удаляется и потом проверяется, возвращает ли поиск индекса -1
 ```f#
+[<Theory>]
+[<InlineData(0)>]
+[<InlineData(1)>]
+[<InlineData(-1)>]
+[<InlineData(5)>]
 let ``test delete`` key =
-    let hm = init |> delete key
+    let hm = initHm |> delete key
     Assert.False(hasKey key hm)
 ```
 **Проверка фильтра.** Отсеиваются все значения с value. Потом проверятся, существует ли такой элемент
 ```f#
+[<Theory>]
+[<InlineData(1, -1)>]
+[<InlineData(0, 3)>]
+[<InlineData(-1, 4)>]
+[<InlineData(5, 5)>]
 let ``test filter`` key value =
-    let hm = init |> filter (fun n -> (n.value <> value))
+    let hm = initHm |> filter (fun n -> (n.value <> value))
     Assert.False(hasKey key hm)
 ```
 **Проверка свойства map.** Применяется функция приводящая value к string и проверяется тип резуьтирующей HashMap 
 ```f#
-[<Fact>]
-let ``test map property`` ()=
-    let hm = init |> map (fun k v -> $"{k} {v}") |> box
-    Assert.True(hm :? hashMap<int, string>)
-    Assert.False(hm :? hashMap<int, int>)
+[<Property>]
+let ``test map property`` (data: (int * int) list) =
+    let hm = init 4 data |> map (fun k v -> $"{k} {v}") |> box
+    hm :? hashMap<int, string>
 ```
 **Проверка fold.** Проверяются результаты некоторых функций для тестовой HashMap
 ```f#
+[<Fact>]
 let ``test fold`` () =
-    let hm = init 
+    let hm = initHm 
     Assert.Equal(15, fold (fun state k v -> state + v) 0 hm)
     Assert.Equal(-15, fold (fun state k v -> state - v) 0 hm)
     Assert.Equal(-240, fold (fun state k v -> state * v) 1 hm)
 ```
 **Проверка backFold.** Аналогично fold.
 ```f#
+[<Fact>]
 let ``test fold`` () =
-    let hm = init 
+    let hm = initHm 
     Assert.Equal(15, fold (fun state k v -> state + v) 0 hm)
     Assert.Equal(-15, fold (fun state k v -> state - v) 0 hm)
     Assert.Equal(-240, fold (fun state k v -> state * v) 1 hm)
 ```
-**Проверка свойства add.** Проверяется, перезаписывается ли значение с тем же ключем.
+**Проверка свойства add.** Проверяется, добавилось ли значение и правильное ли оно при получении.
 ```f#
-let ``test property add`` () =
-    let hm = init
-    let size = hm |> add (5,6)  |> getSize
-    let size2 = hm |> add (5,6) |> add (5,100) |> getSize
-    Assert.Equal(size, size2)
+[<Property>]
+let ``test property add`` (node: (int * int), data: (int * int) list) =
+    let hm = init 2 data
+    let (k, v) = node
+    let addedValue = hm |> add node |> get k |> Option.get
+    addedValue = v
 ```
-**Проверка нейтрального элемента.** Нейтральным элементом является пустая HashMap. Соответственно после слияния с другой HashMap значение функции hash от нее не должно меняться. 
+**Проверка нейтрального элемента.** Нейтральным элементом является пустая HashMap. Соответственно после слияния с другой HashMap сравнение должно вернуть true 
 ```f#
-let ``test property neutral element`` () =
-    let hm = init
+[<Property>]
+let ``test property neutral element`` (data: (int * int) list) =
+    let hm = init 4 data
     let neutral = create 1
-    let sumHm = merge hm neutral
-    let otherSumHm = merge neutral hm
-    Assert.Equal(hash hm, hash sumHm)
-    Assert.Equal(hash hm, hash otherSumHm)
+    let sumHmHash = merge hm neutral
+    compare sumHmHash hm
 ```
 **Проверка ассоциативности** 
 ```f#
-let ``test associativity`` () =
-    let hm1 = init
-    let hm2 = create 4 |> add (13, 3) |> add (6, 4) |>  add (34, 5)
-    let hm3 = create 4 |> add (23, 3) |> add (-3, 4) |>  add (4, 5)
+[<Property>]
+let ``test associativity`` (data1: (int * int) list, data2: (int * int) list, data3: (int * int) list) =
+    let hm1 = init 2 data1
+    let hm2 = init 2 data2
+    let hm3 = init 2 data3
     let merge12 = merge hm1 hm2
     let merge23 = merge hm2 hm3
-    Assert.Equal(hash (merge merge12 hm3), hash (merge hm1 merge23))
+    compare (merge merge12 hm3) (merge hm1 merge23))
 ```
 ### Выводы
 В ходе выполнения лабораторной работы я столкнулся с парой проблем. 
 Первая связана с невозможностью присвоения null воощбе ни к чему. Потом я пытался использовать структуру Nullable, но оказалось, что она работает только как "обертка" классов.
-Только потом я узнал об Option. Также столкнулся с тем, что 2 функции addRec и resize переиспользуют логику друг друга и чтобы это реализовать пришлось "прокидывать" функцию addRec в resize. 
-Мне это кажется плохим решением, но других способов я не нашел.  
+Только потом я узнал об Option. ~~Также столкнулся с тем, что 2 функции addRec и resize переиспользуют логику друг друга и чтобы это реализовать пришлось "прокидывать" функцию addRec в resize. 
+Мне это кажется плохим решением, но других способов я не нашел.~~\
+**Update:** Eсли функция рекурсивная, то объявить одну внутреннюю функцию можно после с помощью
+конструкции "*let rec ... and ...*"

@@ -1,9 +1,11 @@
 module Tests
 
+open Microsoft.FSharp.Core
 open Xunit
+open FsCheck.Xunit
 open HashMap
 
-let init =
+let initHm =
     let hashTable: hashMap<int, int> =
         create 4
         |> add (0, 1)
@@ -34,7 +36,7 @@ let ``test resize`` n =
 [<InlineData(-1)>]
 [<InlineData(5)>]
 let ``test delete`` key =
-    let hm = init |> delete key
+    let hm = initHm |> delete key
     Assert.False(hasKey key hm)
 
 [<Theory>]
@@ -43,49 +45,47 @@ let ``test delete`` key =
 [<InlineData(-1, 4)>]
 [<InlineData(5, 5)>]
 let ``test filter`` key value =
-    let hm = init |> filter (fun n -> (n.value <> value))
+    let hm = initHm |> filter (fun n -> (n.value <> value))
     Assert.False(hasKey key hm)
 
-[<Fact>]
-let ``test map property`` () =
-    let hm = init |> map (fun k v -> $"{k} {v}") |> box
-    Assert.True(hm :? hashMap<int, string>)
-    Assert.False(hm :? hashMap<int, int>)
+[<Property>]
+let ``test map property`` (data: (int * int) list) =
+    let hm = init 4 data |> map (fun k v -> $"{k} {v}") |> box
+    hm :? hashMap<int, string>
 
 [<Fact>]
 let ``test fold`` () =
-    let hm = init
+    let hm = initHm
     Assert.Equal(15, fold (fun state k v -> state + v) 0 hm)
     Assert.Equal(-15, fold (fun state k v -> state - v) 0 hm)
     Assert.Equal(-240, fold (fun state k v -> state * v) 1 hm)
 
 [<Fact>]
 let ``test back fold`` () =
-    let hm = init
+    let hm = initHm
     Assert.Equal(15, backFold (fun state k v -> state + v) 0 hm)
     Assert.Equal(-15, backFold (fun state k v -> state - v) 0 hm)
     Assert.Equal(-240, backFold (fun state k v -> state * v) 1 hm)
 
-[<Fact>]
-let ``test property add`` () =
-    let hm = init
-    let size = hm |> add (5, 6) |> getSize
-    let size2 = hm |> add (5, 6) |> add (5, 100) |> getSize
-    Assert.Equal(size, size2)
+[<Property>]
+let ``test property add`` (node: (int * int), data: (int * int) list) =
+    let hm = init 2 data
+    let (k, v) = node
+    let addedValue = hm |> add node |> get k |> Option.get
+    addedValue = v
 
-[<Fact>]
-let ``test property neutral element`` () =
-    let hm = init
+[<Property>]
+let ``test property neutral element`` (data: (int * int) list) =
+    let hm = init 4 data
     let neutral = create 1
-    let sumHm = merge hm neutral
-    let otherSumHm = merge neutral hm
-    Assert.Equal(hash hm, hash sumHm)
-    Assert.Equal(hash hm, hash otherSumHm)
+    let sumHmHash = merge hm neutral
+    compare sumHmHash hm
 
-let ``test associativity`` () =
-    let hm1 = init
-    let hm2 = create 4 |> add (13, 3) |> add (6, 4) |> add (34, 5)
-    let hm3 = create 4 |> add (23, 3) |> add (-3, 4) |> add (4, 5)
+[<Property>]
+let ``test associativity`` (data1: (int * int) list, data2: (int * int) list, data3: (int * int) list) =
+    let hm1 = init 2 data1
+    let hm2 = init 2 data2
+    let hm3 = init 2 data3
     let merge12 = merge hm1 hm2
     let merge23 = merge hm2 hm3
-    Assert.Equal(hash (merge merge12 hm3), hash (merge hm1 merge23))
+    compare (merge merge12 hm3) (merge hm1 merge23)

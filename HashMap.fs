@@ -28,26 +28,6 @@ let getIndex h (hashMap: hashMap<'K, 'V>) : int =
     let index = h &&& (getSize hashMap - 1)
     index
 
-let private resize
-    (addRec: int -> ('K * 'V) -> hashMap<'K, 'V> -> hashMap<'K, 'V>)
-    (hashMap: hashMap<'K, 'V>)
-    : hashMap<'K, 'V> =
-    let size = getSize hashMap
-    let newHashMap = create<'K, 'V> (size * 2)
-
-    let rec transfer i (hMap: hashMap<'K, 'V>) : hashMap<'K, 'V> =
-        if i < size then
-            let ndOption = hashMap[i]
-
-            if (ndOption.IsSome) then
-                let nd = ndOption.Value
-                transfer (i + 1) (addRec (getIndex (hash nd.key) hMap) (nd.key, nd.value) hMap)
-            else
-                transfer (i + 1) hMap
-        else
-            hMap
-
-    transfer 0 newHashMap
 
 let rec private addRec (i: int) (key: 'K, v: 'V) (hashTable: hashMap<'K, 'V>) =
     let size = hashTable.Length
@@ -70,27 +50,55 @@ let rec private addRec (i: int) (key: 'K, v: 'V) (hashTable: hashMap<'K, 'V>) =
                 hashTable[i] <- Option.Some(node (key, v))
                 hashTable
     else
-        let newHM = resize (addRec) hashTable
+        let newHM = resize hashTable
         addRec (getIndex (hash key) newHM) (key, v) newHM
+
+and resize (hashMap: hashMap<'K, 'V>) : hashMap<'K, 'V> =
+    let size = getSize hashMap
+    let newHashMap = create<'K, 'V> (size * 2)
+
+    let rec transfer i (hMap: hashMap<'K, 'V>) : hashMap<'K, 'V> =
+        if i < size then
+            let ndOption = hashMap[i]
+
+            if ndOption.IsSome then
+                let nd = ndOption.Value
+                transfer (i + 1) (addRec (getIndex (hash nd.key) hMap) (nd.key, nd.value) hMap)
+            else
+                transfer (i + 1) hMap
+        else
+            hMap
+
+    transfer 0 newHashMap
 
 let add (key: 'K, v: 'V) (hashTable: hashMap<'K, 'V>) =
     let innerMap = Array.copy hashTable
     addRec (getIndex (hash key) innerMap) (key, v) innerMap
 
-let private markAsDeleted i (hashMap: hashMap<'K, 'V>) : hashMap<'K, 'V> =
-    let innerMap = Array.copy hashMap
-    let size = hashMap.Length
-    let ndOption = innerMap[i]
+let init n (data: _ list) =
+    let hm = create n
 
-    if (ndOption.IsSome) then
+    let rec dataAdder i newData =
+        if i < data.Length then
+            dataAdder (i + 1) (add (data[i]) newData)
+        else
+            newData
+
+    dataAdder 0 hm
+
+let private markAsDeleted i (hashMap: hashMap<'K, 'V>) : hashMap<'K, 'V> =
+    let size = hashMap.Length
+    let ndOption = hashMap[i]
+
+    if ndOption.IsSome then
         let nd = ndOption.Value
 
         if i = (size - 1) then
-            innerMap[i] <- Option.None
+            hashMap[i] <- Option.None
         else
-            innerMap[i] <- Option.Some(node<'K, 'V> (nd.key, nd.value, true))
+            hashMap[i] <- Option.Some(node<'K, 'V> (nd.key, nd.value, true))
 
-    innerMap
+    hashMap
 
 let rec private findIndexByKey i (key: 'K) (hashMap: hashMap<'K, 'V>) =
     let size = getSize hashMap
@@ -113,15 +121,31 @@ let rec private findIndexByKey i (key: 'K) (hashMap: hashMap<'K, 'V>) =
         -1
 
 let delete (key: 'K) (hashMap: hashMap<'K, 'V>) =
+    let innerHashMap = Array.copy hashMap
     let hash = hash key
     let index = findIndexByKey (getIndex hash hashMap) key hashMap
-    if index >= 0 then markAsDeleted index hashMap else hashMap
+
+    if index >= 0 then
+        markAsDeleted index innerHashMap
+    else
+        hashMap
 
 let hasKey (key: 'K) (hashMap: hashMap<'K, 'V>) =
     let hash = hash key
     let startIndex = getIndex hash hashMap
     printfn $"start index : {startIndex}"
     findIndexByKey startIndex key hashMap <> -1
+
+let get (key: 'K) (hashMap: hashMap<'K, 'V>) =
+    let hash = hash key
+    let startIndex = getIndex hash hashMap
+    printfn $"start index : {startIndex}"
+    let index = findIndexByKey startIndex key hashMap
+
+    if index <> -1 then
+        Option.Some hashMap[index].Value.value
+    else
+        Option.None
 
 let print (hashMap: hashMap<_, _>) =
     for i in hashMap do
@@ -143,7 +167,7 @@ let filter (f: node<'K, 'V> -> bool) (hashMap: hashMap<'K, 'V>) =
         if (i < size) then
             let ndOption = hm[i]
 
-            if (ndOption.IsSome) then
+            if ndOption.IsSome then
                 if not (f (hm[i].Value)) then
                     markAsDeleted i hm |> doFilter (i + 1)
                 else
@@ -245,3 +269,26 @@ let merge (hashMap1: hashMap<'K, 'V>) (hashMap2: hashMap<'K, 'V>) : hashMap<'K, 
         sumHm
         |> iterOverHM (getSize hashMap1 - 1) hashMap1
         |> iterOverHM (getSize hashMap2 - 1) hashMap2
+
+let compare (hashMap1: hashMap<'K, 'V>) (hashMap2: hashMap<'K, 'V>) : bool =
+    if hashMap1.Length <> hashMap2.Length then
+        false
+    else
+        let rec recCompare i res =
+            if res then
+                if i < hashMap1.Length then
+                    let ndOption = hashMap1[i]
+
+                    if (ndOption.IsSome && not ndOption.Value.isDeleted) then
+                        let nd = ndOption.Value
+                        let ndOption2 = get nd.key hashMap2
+                        let cmp = ndOption2.IsSome && ndOption2.Value = nd.value
+                        recCompare (i + 1) cmp
+                    else
+                        recCompare (i + 1) res
+                else
+                    res
+            else
+                res
+
+        recCompare 0 true
