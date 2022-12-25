@@ -25,9 +25,9 @@ let initHm =
 [<InlineData(7)>]
 let ``test resize`` n =
     let hm = create n
-    let init_size = hm |> getSize
-    let size = hm |> add (init_size - 1, 6) |> getSize
-    let size2 = hm |> add (init_size - 1, 6) |> add (-1, 10) |> getSize
+    let initSize = hm |> getSize
+    let size = hm |> add (initSize - 1, 6) |> getSize
+    let size2 = hm |> add (initSize - 1, 6) |> add (-1, 10) |> getSize
     Assert.Equal(size * 2, size2)
 
 [<Theory>]
