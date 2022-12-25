@@ -6,7 +6,7 @@ open FsCheck.Xunit
 open HashMap
 
 let initHm =
-    let hashTable: hashMap<int, int> =
+    let hashTable: HashMap<int, int> =
         create 4
         |> add (0, 1)
         |> add (1, -1)
@@ -51,7 +51,7 @@ let ``test filter`` key value =
 [<Property>]
 let ``test map property`` (data: (int * int) list) =
     let hm = init 4 data |> map (fun k v -> $"{k} {v}") |> box
-    hm :? hashMap<int, string>
+    hm :? HashMap<int, string>
 
 [<Fact>]
 let ``test fold`` () =
