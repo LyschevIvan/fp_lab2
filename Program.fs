@@ -5,7 +5,7 @@ open HashMap
 [<EntryPoint>]
 let main _ =
     // Пример использования некоторых функций
-    let hashTable: hashMap<int, int> = create 4
+    let hashTable: HashMap<int, int> = create 4
     let emptyHM = create 1
 
     hashTable
