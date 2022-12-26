@@ -133,13 +133,11 @@ let delete (key: 'K) (hashMap: HashMap<'K, 'V>) =
 let hasKey (key: 'K) (hashMap: HashMap<'K, 'V>) =
     let hash = hash key
     let startIndex = getIndex hash hashMap
-    printfn $"start index : {startIndex}"
     findIndexByKey startIndex key hashMap <> -1
 
 let get (key: 'K) (hashMap: HashMap<'K, 'V>) =
     let hash = hash key
     let startIndex = getIndex hash hashMap
-    printfn $"start index : {startIndex}"
     let index = findIndexByKey startIndex key hashMap
 
     if index <> -1 then
