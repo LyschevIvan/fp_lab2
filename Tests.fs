@@ -25,9 +25,9 @@ let initHm =
 [<InlineData(7)>]
 let ``test resize`` n =
     let hm = create n
-    let initSize = hm |> getSize
-    let size = hm |> add (initSize - 1, 6) |> getSize
-    let size2 = hm |> add (initSize - 1, 6) |> add (-1, 10) |> getSize
+    let initSize = hm |> getLength
+    let size = hm |> add (initSize - 1, 6) |> getLength
+    let size2 = hm |> add (initSize - 1, 6) |> add (-1, 10) |> getLength
     Assert.Equal(size * 2, size2)
 
 [<Theory>]
@@ -67,12 +67,30 @@ let ``test back fold`` () =
     Assert.Equal(-15, backFold (fun state k v -> state - v) 0 hm)
     Assert.Equal(-240, backFold (fun state k v -> state * v) 1 hm)
 
+[<Fact>]
+let ``test equals`` () =
+    let hm = Array.copy initHm
+    let hmOther = hm |> add (99, 99)
+    let hm2 = hmOther |> delete 99
+    Assert.True(hm .=. initHm)
+    Assert.False(hm .=. hmOther)
+    Assert.True(hm .=. hm2)
+    Assert.True(initHm .=. hm)
+    Assert.False(hmOther .=. hm)
+    Assert.True(hm2 .=. hm)
+
+[<Property>]
+let ``test getSize`` (data: (int * int) list) =
+    let hm = init 2 data
+    let size = data |> List.map (fun (k, v) -> k) |> List.distinct |> List.length
+    Assert.Equal(size, getSize hm)
+
 [<Property>]
 let ``test property add`` (node: (int * int), data: (int * int) list) =
     let hm = init 2 data
     let (k, v) = node
     let addedValue = hm |> add node |> get k |> Option.get
-    addedValue = v
+    addedValue.value = v
 
 [<Property>]
 let ``test property neutral element`` (data: (int * int) list) =
@@ -80,6 +98,20 @@ let ``test property neutral element`` (data: (int * int) list) =
     let neutral = create 1
     let sumHmHash = merge hm neutral
     compare sumHmHash hm
+
+[<Property>]
+let ``test merge`` (data1: (int * int) list, data2: (int * int) list) =
+    let hm1 = init 2 data1
+    let hm2 = init 2 data2
+    let merged = merge hm1 hm2
+
+    let mergedSize =
+        List.append data1 data2
+        |> List.map (fun (k, v) -> k)
+        |> List.distinct
+        |> List.length
+
+    Assert.Equal(mergedSize, getSize merged)
 
 [<Property>]
 let ``test associativity`` (data1: (int * int) list, data2: (int * int) list, data3: (int * int) list) =

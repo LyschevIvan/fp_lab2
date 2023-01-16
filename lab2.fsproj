@@ -11,6 +11,7 @@
         <Compile Include="HashMap.fs" />
         <Compile Include="Tests.fs" />
         <Compile Include="Program.fs" />
+        <Content Include="img\Coverage.png" />
     </ItemGroup>
 
     <ItemGroup>

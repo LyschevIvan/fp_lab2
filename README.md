@@ -59,23 +59,18 @@ let add (key: 'K, v : 'V) (hashTable: hashMap<'K, 'V>) =
 ```
 Функция addRec итеративно ищет подходящую ячейку. Она должла быть либо пустой, либо с флагом isDeleted = true, либо с совпадающим ключем.
 ```f#
-let  rec private addRec (i : int) (key: 'K, v: 'V) (hashTable: hashMap<'K, 'V>) =
+let rec private addRec (i: int) (key: 'K, v: 'V) (hashTable: HashMap<'K, 'V>) =
     let size = hashTable.Length
+
     if (i < size) then
-        let ndOption = hashTable[i]
-        if ndOption.IsNone then
-            hashTable[i] <- Option.Some (node (key, v))
+        match hashTable[i] with
+        | Some nd when nd.isDeleted || ((not nd.isDeleted) && (nd.key = key)) ->
+            hashTable[i] <-Option.Some(Node (key, v))
             hashTable
-        else
-            let nd = ndOption.Value
-            if nd.isDeleted then
-                hashTable[i] <- Option.Some (node (key, v))
-                hashTable
-            else if (nd.key <> key) then
-                addRec  (getNext i) (key, v) hashTable
-            else
-                hashTable[i] <- Option.Some (node (key, v))
-                hashTable
+        | Some nd when (not nd.isDeleted) && (nd.key <> key) ->  addRec (getNext i) (key, v) hashTable
+        | _ ->
+            hashTable[i] <- Option.Some(Node (key, v))
+            hashTable
     else
         let newHM = resize hashTable
         addRec (getIndex (hash key) newHM) (key, v) newHM
@@ -83,19 +78,15 @@ and resize (hashMap: hashMap<'K, 'V>) : hashMap<'K, 'V> = ...
 ```
 Когда индекс массива выходит за границы размера, то создается новый массив с размером в два раза больше. Все элементы переносятся в него и добавляется требуемый 
 ```f#
-and resize (hashMap: hashMap<'K, 'V>) : hashMap<'K, 'V> =
-    let size = getSize hashMap
+and resize (hashMap: HashMap<'K, 'V>) : HashMap<'K, 'V> =
+    let size = getLength hashMap
     let newHashMap = create<'K, 'V> (size * 2)
 
-    let rec transfer i (hMap: hashMap<'K, 'V>) : hashMap<'K, 'V> =
+    let rec transfer i (hMap: HashMap<'K, 'V>) : HashMap<'K, 'V> =
         if i < size then
-            let ndOption = hashMap[i]
-
-            if ndOption.IsSome then
-                let nd = ndOption.Value
-                transfer (i + 1) (addRec (getIndex (hash nd.key) hMap) (nd.key, nd.value) hMap)
-            else
-                transfer (i + 1) hMap
+            match hashMap[i] with
+            | Some nd -> transfer (i + 1) (addRec (getIndex (hash nd.key) hMap) (nd.key, nd.value) hMap)
+            | _ -> transfer (i + 1) hMap
         else
             hMap
 
@@ -103,110 +94,90 @@ and resize (hashMap: hashMap<'K, 'V>) : hashMap<'K, 'V> =
 ```
 Удаление осуществляется поиском нужного индекса по ключу и узел либо помечается удаленным, либо isDeleted
 ```f#
-let delete (key:'K) (hashMap: hashMap<'K, 'V>) =
-    let hash = hash key
-    let index = findIndexByKey (getIndex hash hashMap) key hashMap
-    if index >= 0 then
-        markAsDeleted index hashMap
-    else 
-        hashMap
+let delete (key: 'K) (hashMap: HashMap<'K, 'V>) =
+    let innerHM = Array.copy hashMap
+    let ndOption = get key innerHM
+    match ndOption with
+    | Some ndOption -> markAsDeleted ndOption innerHM
+    | _ -> innerHM
 ```
 Функция поиска индекса возвращает -1, если элемент не найден
 ```f#
-let rec private findIndexByKey i (key : 'K) (hashMap: hashMap<'K, 'V>) =
-    let size = getSize hashMap
+let rec private findIndexByKeyRec i (key: 'K) (hashMap: HashMap<'K, 'V>) =
+    let size = getLength hashMap
     if i < size then
-        let nd = hashMap[i]
-        if nd.IsNone then
-            -1
-        else if nd.Value.isDeleted then
-            if(nd.Value.key = key) then -1
-            else findIndexByKey (getNext i) key hashMap
-        else if key = nd.Value.key then
-            i
-        else
-            findIndexByKey (getNext i) key hashMap
-    else -1
+        match hashMap[i]  with
+        | Some nd when ( not nd.isDeleted) && (nd.key <> key) -> findIndexByKeyRec (getNext i) key hashMap
+        | Some nd when ( not nd.isDeleted ) && (nd.key = key) -> i
+        | _ -> -1
+    else
+        -1
 ```
 В зависимости от того, последний у нас элемент или нет, он помечается Deleted или присваивается None
 ```f#
-let private markAsDeleted i (hashMap: hashMap<'K, 'V>) : hashMap<'K, 'V>=
-    let innerMap = Array.copy hashMap
+let public markAsDeleted (deleteNd: Node<'K, 'V>) (hashMap: HashMap<'K, 'V>) : HashMap<'K, 'V> =
     let size = hashMap.Length
-    let ndOption = innerMap[i]
-    if(ndOption.IsSome) then
+    let ndOption = get deleteNd.key hashMap
+
+    if ndOption.IsSome then
         let nd = ndOption.Value
-        if i = (size-1) then
-            innerMap[i] <- Option.None
+        let i = findIndexByKey nd.key hashMap
+
+        if i = (size - 1) then
+            hashMap[i] <- Option.None
         else
-            innerMap[i] <- Option.Some (node<'K, 'V>(nd.key, nd.value, true))
-    innerMap
+            hashMap[i] <- Option.Some(Node<'K, 'V>(deleteNd.key, deleteNd.value, true))
+
+    hashMap
 ```
 Функция фильтрации проходится по всем элементам и если они не None и функция возвращает false, то узел помечается deleted
 ```f#
-let filter (f: node<'K, 'V> -> bool) (hashMap: hashMap<'K, 'V>) =
+let filter (f: Node<'K, 'V> -> bool) (hashMap: HashMap<'K, 'V>) =
     let innerMap = Array.copy hashMap
-    let size = hashMap.Length
 
-    let rec doFilter i (hm: hashMap<'K, 'V>) : hashMap<'K, 'V> =
-        if (i < size) then
-            let ndOption = hm[i]
+    let rec doFilter (hm: HashMap<'K, 'V>) : HashMap<'K, 'V> =
+        let size = hm.Length
 
-            if (ndOption.IsSome) then
-                if not (f (hm[i].Value)) then
-                    markAsDeleted i hm |> doFilter (i + 1)
-                else
-                    doFilter (i + 1) hm
-            else
-                doFilter (i + 1) hm
-        else
-            hm
+        match hm |> Array.truncate 1 with
+        | [| ndOption |] when ndOption.IsSome ->
+            let nd = ndOption.Value
 
-    doFilter 0 innerMap
+            if not (f nd) then
+                innerMap |> markAsDeleted nd |> ignore
+
+            doFilter hm[1..size]
+        | [| ndOption |] when ndOption.IsNone -> doFilter hm[1..size]
+        | _ -> innerMap
+
+    doFilter innerMap
 ```
 Функция map проходится по всем элементам и если они не None, то узел добаляется к результирующему массиву со значение функции
 
 ```f#
-let map (f: 'K -> 'V -> 'U) (hashMap: hashMap<'K, 'V>) =
+let map (f: 'K -> 'V -> 'U) (hashMap: HashMap<'K, 'V>) =
     let size = hashMap.Length
     let innerMap = create<'K, 'U> size
 
     let rec mapRec i =
-        if i < size then
-            let ndOption = hashMap[i]
+        match i with
+        | 0 -> innerMap
+        | _ ->
+            match hashMap[i] with
+            | Some nd ->
+                innerMap[i] <- Option.Some(Node(nd.key, f nd.key nd.value, nd.isDeleted))
+                mapRec (i - 1)
+            | _ -> mapRec (i - 1)
 
-            if ndOption.IsSome then
-                let nd = ndOption.Value
-
-                if (not nd.isDeleted) then
-                    innerMap[i] <- Option.Some(node (nd.key, f nd.key nd.value, nd.isDeleted))
-
-                mapRec (i + 1)
-            else
-                mapRec (i + 1)
-        else
-            innerMap
-
-    mapRec 0
+    mapRec (size - 1)
 ```
 Функция Fold проходится по всем элементам, если они не None или Deleted, то высчитывается state с помощью передаваемой функции и переходится к следующему элементу.
 ```f#
-let fold (f: 'T -> 'K -> 'V -> 'T) (init: 'T) (hashMap: hashMap<'K, 'V>) : 'T =
-    let size = hashMap.Length
-
+let fold (f: 'T -> 'K -> 'V -> 'T) (init: 'T) (hashMap: HashMap<'K, 'V>) : 'T =
     let rec foldRec i res =
-        if i < size then
-            let npOption = hashMap[i]
-
-            if npOption.IsSome then
-                let np = npOption.Value
-
-                if not np.isDeleted then
-                    foldRec (i + 1) (f res np.key np.value)
-                else
-                    foldRec (i + 1) res
-            else
-                foldRec (i + 1) res
+        if i < getLength hashMap then
+            match hashMap[i] with
+            | Some nd when not nd.isDeleted -> foldRec (i + 1) (f res nd.key nd.value)
+            | _ -> foldRec (i + 1) res
         else
             res
 
@@ -214,22 +185,14 @@ let fold (f: 'T -> 'K -> 'V -> 'T) (init: 'T) (hashMap: hashMap<'K, 'V>) : 'T =
 ```
 Функция backFold делает тоже самое, но начиная с конца
 ```f#
-let backFold (f: 'T -> 'K -> 'V -> 'T) (init: 'T) (hashMap: hashMap<'K, 'V>) : 'T =
+let backFold (f: 'T -> 'K -> 'V -> 'T) (init: 'T) (hashMap: HashMap<'K, 'V>) : 'T =
     let size = hashMap.Length
 
     let rec foldRec i res =
         if i >= 0 then
-            let npOption = hashMap[i]
-
-            if npOption.IsSome then
-                let np = npOption.Value
-
-                if not np.isDeleted then
-                    foldRec (i - 1) (f res np.key np.value)
-                else
-                    foldRec (i - 1) res
-            else
-                foldRec (i - 1) res
+            match hashMap[i] with
+            | Some nd when not nd.isDeleted -> foldRec (i - 1) (f res nd.key nd.value)
+            | _ -> foldRec (i - 1) res
         else
             res
 
@@ -237,34 +200,27 @@ let backFold (f: 'T -> 'K -> 'V -> 'T) (init: 'T) (hashMap: hashMap<'K, 'V>) : '
 ```
 Функция Merge служит для слияния двух HashMap. Создается массив с размером наибольшей передаваемой HashMap и туда сначала добавляются элементы из первого HashMap, потом из другой 
 ```f#
-let merge (hashMap1: hashMap<'K, 'V>) (hashMap2: hashMap<'K, 'V>) : hashMap<'K, 'V> =
+let merge (hashMap1: HashMap<'K, 'V>) (hashMap2: HashMap<'K, 'V>) : HashMap<'K, 'V> =
     if (getSize hashMap1 = 0) then
         hashMap2
-    else if (getSize hashMap2 = 0) then
+    elif (getSize hashMap2 = 0) then
         hashMap1
     else
-        let initSize = max (getSize hashMap1) (getSize hashMap2)
+        let initSize = max (getLength hashMap1) (getLength hashMap2)
         let sumHm = create initSize
 
-        let rec iterOverHM i (hm: hashMap<'K, 'V>) (resHm: hashMap<'K, 'V>) =
+        let rec iterOverHM i (hm: HashMap<'K, 'V>) (resHm: HashMap<'K, 'V>) =
             if i >= 0 then
-                let ndOption = hm[i]
-
-                if ndOption.IsSome then
-                    let nd = ndOption.Value
-
-                    if not nd.isDeleted then
-                        add (nd.key, nd.value) resHm |> iterOverHM (i - 1) hm
-                    else
-                        iterOverHM (i - 1) hm resHm
-                else
-                    iterOverHM (i - 1) hm resHm
+                match hm[i] with
+                | Some nd when not nd.isDeleted -> add (nd.key, nd.value) resHm |> iterOverHM (i - 1) hm
+                | Some nd when nd.isDeleted -> iterOverHM (i - 1) hm resHm
+                | _ -> iterOverHM (i - 1) hm resHm
             else
                 resHm
 
         sumHm
-        |> iterOverHM (getSize hashMap1 - 1) hashMap1
-        |> iterOverHM (getSize hashMap2 - 1) hashMap2
+        |> iterOverHM (getLength hashMap1 - 1) hashMap1
+        |> iterOverHM (getLength hashMap2 - 1) hashMap2
 ```
 ### Тесты
 В каждом тесте, кроме PBT, используются начальные значения, которые создаются функцией initHm
@@ -373,6 +329,9 @@ let ``test associativity`` (data1: (int * int) list, data2: (int * int) list, da
     let merge23 = merge hm2 hm3
     compare (merge merge12 hm3) (merge hm1 merge23))
 ```
+### Покрытие тестов 
+<img alt="tests coverage" src="./img/Coverage.png"> 
+
 ### Выводы
 В ходе выполнения лабораторной работы я столкнулся с парой проблем. 
 Первая связана с невозможностью присвоения null воощбе ни к чему. Потом я пытался использовать структуру Nullable, но оказалось, что она работает только как "обертка" классов.
